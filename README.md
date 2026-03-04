@@ -252,26 +252,39 @@ Policies are versioned JSON — commit them to Git, review changes in PRs, roll 
 
 ## Performance
 
-Results at 10,000 RPS steady state (c6i.xlarge, 4 vCPU):
+### Benchmark methodology (March 4, 2026)
+
+- **Host:** AWS `c7i.2xlarge` (8 vCPU, 16 GiB RAM)
+- **OS:** Ubuntu 24.04.3 LTS
+- **Runtime:** OpenResty 1.29.2.1, Fairvisor latest `main` (no Docker)
+- **Load tool:** `k6` v0.54.0, `constant-arrival-rate`, 10,000 RPS for 60s, 10s warmup
+- **Benchmark script:** `run-all.sh` from `fairvisor/benchmark`
+- **CPU isolation (single-host run):** `taskset` split
+  - OpenResty/backend on cores `0-3`
+  - k6 on cores `4-7`
+- **Decision endpoint contract:** `POST /v1/decision` with `X-Original-Method` and `X-Original-URI`
+- **Note:** reverse proxy numbers include policy evaluation and upstream proxy hop to backend nginx.
+
+### Latest measured latency @ 10,000 RPS
 
 | Percentile | Decision service | Reverse proxy | Raw nginx (baseline) |
 |---|---|---|---|
-| p50 | 68 μs | 142 μs | 78 μs |
-| p90 | 95 μs | 198 μs | 112 μs |
-| p99 | 280 μs | 520 μs | 310 μs |
-| p99.9 | 1.2 ms | 2.8 ms | 1.5 ms |
+| p50 | 112 μs | 241 μs | 71 μs |
+| p90 | 191 μs | 376 μs | 190 μs |
+| p99 | 426 μs | 822 μs | 446 μs |
+| p99.9 | 2.99 ms | 2.98 ms | 1.61 ms |
 
-Max sustained throughput (single instance):
+### Latest max sustained throughput (single instance)
 
 | Configuration | Max RPS |
 |---|---|
-| Simple rate limit (1 rule) | 85,000 |
-| Complex policy (5 rules, JWT parsing, loop detection) | 52,000 |
-| With token estimation | 38,000 |
+| Simple rate limit (1 rule) | 110,500 |
+| Complex policy (5 rules, JWT parsing, loop detection) | 67,600 |
+| With token estimation | 49,400 |
 
 **No external datastore.** All enforcement state lives in in-process shared memory (`ngx.shared.dict`). No Redis, no Postgres, no network round-trips in the decision path.
 
-> Reproduce: `git clone https://github.com/fairvisor/benchmarks && cd benchmarks && ./run-all.sh`
+> Reproduce: `git clone https://github.com/fairvisor/benchmark && cd benchmark && ./run-all.sh`
 
 ## Deployment
 
