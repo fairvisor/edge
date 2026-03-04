@@ -1,0 +1,64 @@
+{
+  "bundle_version": 1,
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2030-01-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "asn-type-policy",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/asn/",
+          "methods": [
+            "GET",
+            "POST"
+          ]
+        },
+        "mode": "enforce",
+        "rules": [
+          {
+            "name": "asn-type-token-bucket",
+            "limit_keys": [
+              "ip:type",
+              "header:x-e2e-key"
+            ],
+            "algorithm": "token_bucket",
+            "algorithm_config": {
+              "tokens_per_second": 1,
+              "burst": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "tor-exit-policy",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/tor/",
+          "methods": [
+            "POST"
+          ]
+        },
+        "mode": "enforce",
+        "rules": [
+          {
+            "name": "tor-exit-tight-limit",
+            "match": {
+              "ip:tor": "true"
+            },
+            "limit_keys": [
+              "ip:tor",
+              "header:x-e2e-key"
+            ],
+            "algorithm": "token_bucket",
+            "algorithm_config": {
+              "tokens_per_second": 1,
+              "burst": 1
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "kill_switches": []
+}

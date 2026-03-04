@@ -1,0 +1,32 @@
+{
+  "bundle_version": 1,
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2030-01-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "llm-policy",
+      "spec": {
+        "selector": {
+          "pathExact": "/v1/chat/completions",
+          "methods": ["POST"]
+        },
+        "mode": "enforce",
+        "rules": [
+          {
+            "name": "llm-token-limit",
+            "limit_keys": ["jwt:org_id"],
+            "algorithm": "token_bucket_llm",
+            "algorithm_config": {
+              "algorithm": "token_bucket_llm",
+              "tokens_per_minute": 120000,
+              "tokens_per_day": 2000000,
+              "burst_tokens": 120000,
+              "default_max_completion_tokens": 1024
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "kill_switches": []
+}

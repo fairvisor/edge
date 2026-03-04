@@ -1,0 +1,34 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  bash \
+  build-essential \
+  curl \
+  git \
+  lua5.4 \
+  liblua5.4-dev \
+  luarocks \
+  python3 \
+  python3-pip \
+  && rm -rf /var/lib/apt/lists/*
+
+# Make lua5.4 the system default lua.
+# Our test code uses the ~ bitwise-XOR operator (Lua 5.3+); busted must run
+# under lua5.4 or the spec files will fail to parse.
+RUN update-alternatives --set lua-interpreter /usr/bin/lua5.4
+
+# Pre-install lua-term (a transitive busted dependency) via git clone to avoid
+# a fragile GitHub archive download that intermittently fails in CI networks.
+RUN git clone --depth=1 --branch 0.08 \
+      https://github.com/hoelzro/lua-term.git /tmp/lua-term \
+  && cd /tmp/lua-term \
+  && luarocks --lua-version 5.4 make lua-term-0.8-1.rockspec \
+  && rm -rf /tmp/lua-term
+
+RUN luarocks --lua-version 5.4 install busted 2.2.0-1 && \
+  luarocks --lua-version 5.4 install luacheck 1.1.0-1 && \
+  luarocks --lua-version 5.4 install luacov 0.15.0-1
+
+WORKDIR /work

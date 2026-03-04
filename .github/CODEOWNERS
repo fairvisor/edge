@@ -1,0 +1,19 @@
+# Default reviewer for everything
+*                           @levleontiev
+
+# Runtime modules
+src/fairvisor/              @levleontiev
+src/nginx/                  @levleontiev
+
+# CLI
+cli/                        @levleontiev
+
+# Tests
+spec/                       @levleontiev
+tests/                      @levleontiev
+
+# Helm chart
+helm/                       @levleontiev
+
+# CI/CD workflows
+.github/                    @levleontiev

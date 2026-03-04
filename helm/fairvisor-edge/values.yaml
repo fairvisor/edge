@@ -1,0 +1,60 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/fairvisor/fairvisor-edge
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: fairvisor.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+mode: decision_service
+backendUrl: ""
+sharedDictSize: 128m
+logLevel: info
+configPollInterval: 30
+heartbeatInterval: 5
+eventFlushInterval: 60
+
+saas:
+  url: ""
+  edgeId: ""
+  edgeToken: ""
+  edgeTokenSecretRef: ""
+  edgeTokenSecretKey: edgeToken
+
+standalone:
+  configFilePath: /etc/fairvisor/policy.json
+  policy:
+    existingConfigMapRef: ""
+    existingSecretRef: ""
+    key: policy.json
+    inlineJson: |
+      {
+        "bundle_version": 1,
+        "issued_at": "2026-01-01T00:00:00Z",
+        "policies": [],
+        "kill_switches": []
+      }
+
+resources: {}
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podSecurityContext: {}
+securityContext: {}

@@ -1,0 +1,91 @@
+worker_processes ${FAIRVISOR_WORKER_PROCESSES};
+
+env FAIRVISOR_CONFIG_FILE;
+env FAIRVISOR_SAAS_URL;
+env FAIRVISOR_EDGE_ID;
+env FAIRVISOR_EDGE_TOKEN;
+env FAIRVISOR_CONFIG_POLL_INTERVAL;
+env FAIRVISOR_HEARTBEAT_INTERVAL;
+env FAIRVISOR_EVENT_FLUSH_INTERVAL;
+env FAIRVISOR_SHARED_DICT_SIZE;
+env FAIRVISOR_LOG_LEVEL;
+env FAIRVISOR_MODE;
+env FAIRVISOR_BACKEND_URL;
+env FAIRVISOR_DEBUG_SESSION_SECRET;
+
+events {
+  worker_connections 1024;
+}
+
+error_log /dev/stderr ${FAIRVISOR_LOG_LEVEL};
+pid /tmp/nginx.pid;
+worker_shutdown_timeout 35s;
+
+http {
+  resolver 127.0.0.11 ipv6=off valid=30s;
+  resolver_timeout 2s;
+  geo $is_tor_exit {
+    default 0;
+    include /etc/nginx/iplists/tor_exits.geo;
+  }
+  map $is_tor_exit $tor_tag {
+    0 "";
+    1 "tor_exit";
+  }
+  map $http_x_asn $fairvisor_asn_type {
+    include /etc/fairvisor/asn_type.map;
+  }
+  lua_package_path "/opt/fairvisor/src/?.lua;;";
+  lua_shared_dict fairvisor_counters ${FAIRVISOR_SHARED_DICT_SIZE};
+
+  init_worker_by_lua_file /opt/fairvisor/src/nginx/init_worker.lua;
+
+  server {
+    listen 8080;
+    server_name _;
+    set $fairvisor_mode "${FAIRVISOR_MODE}";
+    set $fairvisor_backend "${FAIRVISOR_BACKEND_URL}";
+
+    location = /livez {
+      default_type text/plain;
+      return 200 "ok\n";
+    }
+
+    location = /readyz {
+      default_type application/json;
+      content_by_lua_file /opt/fairvisor/src/nginx/readyz.lua;
+    }
+
+    location = /metrics {
+      default_type text/plain;
+      content_by_lua_file /opt/fairvisor/src/nginx/metrics.lua;
+    }
+
+    location = /v1/decision {
+      default_type application/json;
+      content_by_lua_file /opt/fairvisor/src/nginx/decision.lua;
+    }
+
+    location = /v1/debug/session {
+      content_by_lua_file /opt/fairvisor/src/nginx/debug_session.lua;
+    }
+
+    location = /v1/debug/logout {
+      content_by_lua_file /opt/fairvisor/src/nginx/debug_logout.lua;
+    }
+
+    location / {
+      access_by_lua_file /opt/fairvisor/src/nginx/access.lua;
+
+      header_filter_by_lua_file /opt/fairvisor/src/nginx/header_filter.lua;
+
+      if ($fairvisor_mode = reverse_proxy) {
+        proxy_pass $fairvisor_backend;
+        break;
+      }
+
+      default_type text/plain;
+      return 404 "not found\n";
+    }
+  }
+}

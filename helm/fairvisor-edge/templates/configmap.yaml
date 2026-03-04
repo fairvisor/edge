@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-fairvisor-edge-nginx
+  labels:
+    app.kubernetes.io/name: fairvisor-edge
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  nginx.conf.template: |
+    worker_processes auto;
+
+    events {
+      worker_connections 1024;
+    }
+
+    error_log /dev/stderr ${FAIRVISOR_LOG_LEVEL};
+    pid /tmp/nginx.pid;
+    worker_shutdown_timeout 35s;
+
+    http {
+      map $http_x_asn $fairvisor_asn_type {
+        include /etc/fairvisor/asn_type.map;
+      }
+      lua_package_path "/opt/fairvisor/src/?.lua;;";
+      lua_shared_dict fairvisor_counters ${FAIRVISOR_SHARED_DICT_SIZE};
+
+      init_worker_by_lua_block {
+        local env_config_ok, env_config = pcall(require, "fairvisor.env_config")
+        if not env_config_ok then
+          ngx.log(ngx.ERR, "fairvisor module=init_worker env_config_require_failed err=", env_config)
+          return
+        end
+
+        local config = env_config.load()
+        local valid, validate_err = env_config.validate(config)
+        if not valid then
+          ngx.log(ngx.ERR, "fairvisor module=init_worker env_config_invalid err=", validate_err)
+          return
+        end
+
+        if env_config.is_standalone(config) then
+          local read_err
+          local file = io.open(config.config_file, "rb")
+          if not file then
+            ngx.log(ngx.ERR, "fairvisor module=init_worker standalone_read_failed file=", config.config_file)
+          else
+            local content = file:read("*a")
+            file:close()
+
+            local bundle_loader_ok, bundle_loader = pcall(require, "fairvisor.bundle_loader")
+            if bundle_loader_ok and bundle_loader and bundle_loader.load_from_string and bundle_loader.apply then
+              local compiled, load_err = bundle_loader.load_from_string(content)
+              if compiled then
+                bundle_loader.apply(compiled)
+                ngx.log(ngx.NOTICE, "fairvisor module=init_worker standalone_policy_reloaded file=", config.config_file)
+              else
+                read_err = load_err
+              end
+            else
+              read_err = "bundle_loader unavailable"
+            end
+          end
+
+          if read_err then
+            ngx.log(ngx.ERR, "fairvisor module=init_worker standalone_reload_failed err=", read_err)
+          end
+        end
+
+        local shutdown_ok, shutdown = pcall(require, "fairvisor.shutdown")
+        if not shutdown_ok then
+          ngx.log(ngx.ERR, "fairvisor module=init_worker shutdown_require_failed err=", shutdown)
+          return
+        end
+
+        local saas_client_ok, saas_client = pcall(require, "fairvisor.saas_client")
+        if not saas_client_ok then
+          saas_client = nil
+        end
+
+        local health_ok, health = pcall(require, "fairvisor.health")
+        if not health_ok then
+          health = nil
+        end
+
+        local init_ok, init_err = shutdown.init({ saas_client = saas_client, health = health })
+        if not init_ok then
+          ngx.log(ngx.ERR, "fairvisor module=init_worker shutdown_init_failed err=", init_err)
+        end
+
+        local bundle_loader = require("fairvisor.bundle_loader")
+        local rule_engine = require("fairvisor.rule_engine")
+        local re_ok, re_err = rule_engine.init({ dict = ngx.shared.fairvisor_counters, health = health })
+        if not re_ok then
+          ngx.log(ngx.ERR, "fairvisor module=init_worker rule_engine_init_failed err=", re_err)
+        else
+          local decision_api = require("fairvisor.decision_api")
+          local da_ok, da_err = decision_api.init({ bundle_loader = bundle_loader, rule_engine = rule_engine, health = health })
+          if not da_ok then
+            ngx.log(ngx.ERR, "fairvisor module=init_worker decision_api_init_failed err=", da_err)
+          end
+        end
+      }
+
+      server {
+        listen 8080;
+        server_name _;
+        set $fairvisor_mode "${FAIRVISOR_MODE}";
+        set $fairvisor_backend "${FAIRVISOR_BACKEND_URL}";
+
+        location = /livez {
+          default_type text/plain;
+          return 200 "ok\\n";
+        }
+
+        location = /readyz {
+          default_type text/plain;
+          return 200 "ok\\n";
+        }
+
+        location = /v1/decision {
+          access_by_lua_block {
+            local decision_api = require("fairvisor.decision_api")
+            decision_api.access_handler()
+          }
+          default_type application/json;
+          return 200 '{"decision":"allow"}';
+        }
+
+        location = /decision {
+          access_by_lua_block {
+            local decision_api = require("fairvisor.decision_api")
+            decision_api.access_handler()
+          }
+          default_type application/json;
+          return 200 '{"decision":"allow"}';
+        }
+
+        location / {
+          if ($fairvisor_mode = reverse_proxy) {
+            proxy_pass $fairvisor_backend;
+            break;
+          }
+
+          default_type text/plain;
+          return 200 "fairvisor edge\\n";
+        }
+      }
+    }

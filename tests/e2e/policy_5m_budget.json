@@ -1,0 +1,52 @@
+{
+  "bundle_version": 1,
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2030-01-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "budget-5m-policy",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/",
+          "methods": [
+            "GET",
+            "POST"
+          ]
+        },
+        "mode": "enforce",
+        "rules": [
+          {
+            "name": "budget-5m-rule",
+            "limit_keys": [
+              "header:x-e2e-key"
+            ],
+            "algorithm": "cost_based",
+            "algorithm_config": {
+              "budget": 1,
+              "period": "5m",
+              "cost_key": "fixed",
+              "fixed_cost": 1,
+              "default_cost": 1,
+              "staged_actions": [
+                {
+                  "threshold_percent": 80,
+                  "action": "warn"
+                },
+                {
+                  "threshold_percent": 95,
+                  "action": "throttle",
+                  "delay_ms": 5
+                },
+                {
+                  "threshold_percent": 100,
+                  "action": "reject"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "kill_switches": []
+}

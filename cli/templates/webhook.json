@@ -1,0 +1,25 @@
+{
+  "version": "1",
+  "policies": [
+    {
+      "id": "policy_webhook_default",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/webhooks/"
+        },
+        "rules": [
+          {
+            "name": "webhook_rate_limit",
+            "algorithm": "token_bucket",
+            "limit_key": "ip",
+            "config": {
+              "algorithm": "token_bucket",
+              "tokens_per_second": 500,
+              "burst": 1000
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

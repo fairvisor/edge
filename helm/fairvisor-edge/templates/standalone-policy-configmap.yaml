@@ -1,0 +1,12 @@
+{{- if .Values.standalone.policy.inlineJson }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-fairvisor-edge-policy
+  labels:
+    app.kubernetes.io/name: fairvisor-edge
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  {{ .Values.standalone.policy.key }}: |
+{{ .Values.standalone.policy.inlineJson | nindent 4 }}
+{{- end }}

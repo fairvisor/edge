@@ -1,0 +1,167 @@
+# E2E test stack: Fairvisor Edge in standalone mode.
+# Run from repo root: docker compose -f tests/e2e/docker-compose.test.yml up -d
+# Base URL: http://localhost:18080 (edge), http://localhost:18081 (edge_debug, for E5 log-level test).
+
+services:
+  edge:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "18080:8080"
+    environment:
+      FAIRVISOR_CONFIG_FILE: /etc/fairvisor/policy.json
+      FAIRVISOR_SHARED_DICT_SIZE: 4m
+      FAIRVISOR_LOG_LEVEL: info
+      FAIRVISOR_MODE: decision_service
+      FAIRVISOR_DEBUG_SESSION_SECRET: e2e-debug-secret
+      FAIRVISOR_WORKER_PROCESSES: "1"
+    volumes:
+      - ./policy_minimal.json:/etc/fairvisor/policy.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  edge_debug:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "18081:8080"
+    environment:
+      FAIRVISOR_CONFIG_FILE: /etc/fairvisor/policy.json
+      FAIRVISOR_SHARED_DICT_SIZE: 4m
+      FAIRVISOR_LOG_LEVEL: debug
+      FAIRVISOR_MODE: decision_service
+      FAIRVISOR_WORKER_PROCESSES: "1"
+    volumes:
+      - ./policy_minimal.json:/etc/fairvisor/policy.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  edge_hosts:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "18082:8080"
+    environment:
+      FAIRVISOR_CONFIG_FILE: /etc/fairvisor/policy.json
+      FAIRVISOR_SHARED_DICT_SIZE: 4m
+      FAIRVISOR_LOG_LEVEL: info
+      FAIRVISOR_MODE: decision_service
+      FAIRVISOR_WORKER_PROCESSES: "1"
+    volumes:
+      - ./policy_hosts_selector.json:/etc/fairvisor/policy.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  edge_5m:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "18083:8080"
+    environment:
+      FAIRVISOR_CONFIG_FILE: /etc/fairvisor/policy.json
+      FAIRVISOR_SHARED_DICT_SIZE: 4m
+      FAIRVISOR_LOG_LEVEL: info
+      FAIRVISOR_MODE: decision_service
+      FAIRVISOR_WORKER_PROCESSES: "1"
+    volumes:
+      - ./policy_5m_budget.json:/etc/fairvisor/policy.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  edge_nobundle:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "18084:8080"
+    environment:
+      FAIRVISOR_MODE: decision_service
+      FAIRVISOR_WORKER_PROCESSES: "1"
+      FAIRVISOR_SHARED_DICT_SIZE: 4m
+      FAIRVISOR_LOG_LEVEL: info
+      FAIRVISOR_SAAS_URL: "http://127.0.0.1:9"
+      FAIRVISOR_EDGE_ID: "edge-e2e-nobundle"
+      FAIRVISOR_EDGE_TOKEN: "edge-e2e-nobundle-token"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/livez"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  backend_reverse:
+    image: nginx:1.27-alpine
+    ports:
+      - "18086:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:80/"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  edge_reverse:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "18085:8080"
+    environment:
+      FAIRVISOR_CONFIG_FILE: /etc/fairvisor/policy.json
+      FAIRVISOR_SHARED_DICT_SIZE: 4m
+      FAIRVISOR_LOG_LEVEL: info
+      FAIRVISOR_MODE: reverse_proxy
+      FAIRVISOR_BACKEND_URL: http://backend_reverse:80
+      FAIRVISOR_WORKER_PROCESSES: "1"
+    volumes:
+      - ./policy_minimal.json:/etc/fairvisor/policy.json:ro
+    depends_on:
+      backend_reverse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  edge_asn:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "18087:8080"
+    environment:
+      FAIRVISOR_CONFIG_FILE: /etc/fairvisor/policy.json
+      FAIRVISOR_SHARED_DICT_SIZE: 4m
+      FAIRVISOR_LOG_LEVEL: info
+      FAIRVISOR_MODE: decision_service
+      FAIRVISOR_WORKER_PROCESSES: "1"
+    volumes:
+      - ./policy_asn_type.json:/etc/fairvisor/policy.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s

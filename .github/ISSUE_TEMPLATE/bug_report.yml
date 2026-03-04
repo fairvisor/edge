@@ -1,0 +1,90 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Fairvisor Edge
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the fields below as completely as possible.
+        For security vulnerabilities, please use the process described in [SECURITY.md](../SECURITY.md) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Fairvisor version
+      description: Run `fairvisor --version` or check your image tag
+      placeholder: "e.g. v0.1.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment_mode
+    attributes:
+      label: Deployment mode
+      description: How are you running Fairvisor Edge?
+      options:
+        - decision-service (standalone HTTP API)
+        - reverse-proxy (nginx + lua)
+        - Docker Compose
+        - Helm / Kubernetes
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: policy_snippet
+    attributes:
+      label: Policy snippet
+      description: Paste the relevant portion of your policy bundle (remove sensitive values)
+      render: json
+      placeholder: |
+        {
+          "limits": { ... }
+        }
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps that reliably reproduce the issue
+      placeholder: |
+        1. Start Fairvisor with policy '...'
+        2. Send request: `curl -H "X-User-ID: u1" http://localhost:8080/`
+        3. Observe error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened? Include any error messages.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste logs from `docker logs`, `journalctl`, or nginx error.log (redact IPs/tokens)
+      render: shell
+
+  - type: input
+    id: os
+    attributes:
+      label: OS / platform
+      placeholder: "e.g. Ubuntu 24.04, macOS 15, linux/arm64"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Links to related issues, workarounds you've tried, etc.

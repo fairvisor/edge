@@ -1,0 +1,155 @@
+{{- $mode := .Values.mode | default "decision_service" -}}
+{{- if and (ne $mode "decision_service") (ne $mode "reverse_proxy") -}}
+{{- fail "values.mode must be decision_service or reverse_proxy" -}}
+{{- end -}}
+{{- if and (eq $mode "reverse_proxy") (not .Values.backendUrl) -}}
+{{- fail "values.backendUrl is required when values.mode=reverse_proxy" -}}
+{{- end -}}
+
+{{- $saasEnabled := ne (.Values.saas.url | default "") "" -}}
+{{- $standaloneInline := ne (.Values.standalone.policy.inlineJson | default "") "" -}}
+{{- $standaloneConfigMap := ne (.Values.standalone.policy.existingConfigMapRef | default "") "" -}}
+{{- $standaloneSecret := ne (.Values.standalone.policy.existingSecretRef | default "") "" -}}
+{{- $standaloneEnabled := or $standaloneInline (or $standaloneConfigMap $standaloneSecret) -}}
+{{- if and $saasEnabled $standaloneEnabled -}}
+{{- fail "Choose only one mode source: either saas.url or standalone policy source" -}}
+{{- end -}}
+{{- if and (not $saasEnabled) (not $standaloneEnabled) -}}
+{{- fail "Set saas.url or provide standalone policy source (inlineJson/existingConfigMapRef/existingSecretRef)" -}}
+{{- end -}}
+{{- if and $saasEnabled (not .Values.saas.edgeId) -}}
+{{- fail "values.saas.edgeId is required when values.saas.url is set" -}}
+{{- end -}}
+{{- $tokenInline := ne (.Values.saas.edgeToken | default "") "" -}}
+{{- $tokenSecret := ne (.Values.saas.edgeTokenSecretRef | default "") "" -}}
+{{- if and $saasEnabled (not (or $tokenInline $tokenSecret)) -}}
+{{- fail "Set values.saas.edgeToken or values.saas.edgeTokenSecretRef when values.saas.url is set" -}}
+{{- end -}}
+{{- if and $saasEnabled $tokenInline $tokenSecret -}}
+{{- fail "Set only one of values.saas.edgeToken or values.saas.edgeTokenSecretRef" -}}
+{{- end -}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-fairvisor-edge
+  labels:
+    app.kubernetes.io/name: fairvisor-edge
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fairvisor-edge
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fairvisor-edge
+        app.kubernetes.io/instance: {{ .Release.Name }}
+{{- with .Values.podAnnotations }}
+      annotations:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+    spec:
+{{- with .Values.podSecurityContext }}
+      securityContext:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+      containers:
+        - name: fairvisor-edge
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: FAIRVISOR_EDGE_ID
+              value: {{ .Values.saas.edgeId | quote }}
+            - name: FAIRVISOR_SAAS_URL
+              value: {{ .Values.saas.url | quote }}
+            - name: FAIRVISOR_CONFIG_FILE
+              value: {{ .Values.standalone.configFilePath | quote }}
+            - name: FAIRVISOR_CONFIG_POLL_INTERVAL
+              value: {{ .Values.configPollInterval | quote }}
+            - name: FAIRVISOR_HEARTBEAT_INTERVAL
+              value: {{ .Values.heartbeatInterval | quote }}
+            - name: FAIRVISOR_EVENT_FLUSH_INTERVAL
+              value: {{ .Values.eventFlushInterval | quote }}
+            - name: FAIRVISOR_SHARED_DICT_SIZE
+              value: {{ .Values.sharedDictSize | quote }}
+            - name: FAIRVISOR_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: FAIRVISOR_MODE
+              value: {{ .Values.mode | quote }}
+            - name: FAIRVISOR_BACKEND_URL
+              value: {{ .Values.backendUrl | quote }}
+{{- if $tokenSecret }}
+            - name: FAIRVISOR_EDGE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.saas.edgeTokenSecretRef | quote }}
+                  key: {{ .Values.saas.edgeTokenSecretKey | quote }}
+{{- else }}
+            - name: FAIRVISOR_EDGE_TOKEN
+              value: {{ .Values.saas.edgeToken | quote }}
+{{- end }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+{{- with .Values.resources }}
+          resources:
+{{ toYaml . | nindent 12 }}
+{{- end }}
+{{- with .Values.securityContext }}
+          securityContext:
+{{ toYaml . | nindent 12 }}
+{{- end }}
+          volumeMounts:
+            - name: nginx-template
+              mountPath: /opt/fairvisor/nginx.conf.template
+              subPath: nginx.conf.template
+{{- if $standaloneEnabled }}
+            - name: standalone-policy
+              mountPath: /etc/fairvisor
+              readOnly: true
+{{- end }}
+      volumes:
+        - name: nginx-template
+          configMap:
+            name: {{ .Release.Name }}-fairvisor-edge-nginx
+{{- if $standaloneInline }}
+        - name: standalone-policy
+          configMap:
+            name: {{ .Release.Name }}-fairvisor-edge-policy
+{{- else if $standaloneConfigMap }}
+        - name: standalone-policy
+          configMap:
+            name: {{ .Values.standalone.policy.existingConfigMapRef | quote }}
+{{- else if $standaloneSecret }}
+        - name: standalone-policy
+          secret:
+            secretName: {{ .Values.standalone.policy.existingSecretRef | quote }}
+{{- end }}
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+{{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+{{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | nindent 8 }}
+{{- end }}

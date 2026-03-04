@@ -1,0 +1,36 @@
+{
+  "bundle_version": 1,
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2030-01-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "loop-detection-policy",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/v1/chat/",
+          "methods": ["POST"]
+        },
+        "mode": "enforce",
+        "rules": [
+          {
+            "name": "baseline-token-limit",
+            "limit_keys": ["header:x-api-key"],
+            "algorithm": "token_bucket",
+            "algorithm_config": {
+              "tokens_per_second": 10,
+              "burst": 20
+            }
+          }
+        ],
+        "loop_detection": {
+          "enabled": true,
+          "window_seconds": 60,
+          "threshold_identical_requests": 10,
+          "action": "reject",
+          "similarity": "exact"
+        }
+      }
+    }
+  ],
+  "kill_switches": []
+}

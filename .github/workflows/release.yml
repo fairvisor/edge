@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions: {}
+
+env:
+  REGISTRY: ghcr.io
+  EDGE_IMAGE: ghcr.io/${{ github.repository_owner }}/fairvisor-edge
+  CLI_IMAGE: ghcr.io/${{ github.repository_owner }}/fairvisor-cli
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Verify release tag and changelog
+        run: bin/ci/verify_release_tag.sh "${GITHUB_REF_NAME}"
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install E2E dependencies
+        run: pip install -r tests/e2e/requirements.txt
+
+      - name: Build Lua test container
+        run: docker build -f docker/Dockerfile.test -t fairvisor-test-release .
+
+      - name: Run Lua quality gates
+        run: docker run --rm -v "$PWD:/work" -w /work fairvisor-test-release bin/ci/run_lua_tests.sh
+
+      - name: Run full E2E suite
+        run: bin/ci/run_e2e_full.sh
+
+      - name: Upload preflight artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: release-preflight-artifacts
+          path: artifacts/e2e-full
+          if-no-files-found: ignore
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: preflight
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      edge_digest: ${{ steps.build_edge.outputs.digest }}
+      cli_digest: ${{ steps.build_cli.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392  # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push runtime image
+        id: build_edge
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.EDGE_IMAGE }}:${{ github.ref_name }}
+            ${{ env.EDGE_IMAGE }}:sha-${{ github.sha }}
+          build-args: |
+            FAIRVISOR_EDGE_VERSION=${{ github.ref_name }}
+
+      - name: Build and push CLI image
+        id: build_cli
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          file: docker/Dockerfile.cli
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.CLI_IMAGE }}:${{ github.ref_name }}
+            ${{ env.CLI_IMAGE }}:sha-${{ github.sha }}
+
+  security-and-sbom:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514  # v0.2.5
+
+      - name: Scan pushed runtime image
+        run: trivy image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed "${EDGE_IMAGE}:${GITHUB_REF_NAME}"
+
+      - name: Scan pushed CLI image
+        run: trivy image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed "${CLI_IMAGE}:${GITHUB_REF_NAME}"
+
+      - name: Generate SBOM assets
+        run: |
+          mkdir -p artifacts/release
+          trivy image --format cyclonedx --output artifacts/release/sbom-runtime.cdx.json "${EDGE_IMAGE}:${GITHUB_REF_NAME}"
+          trivy image --format cyclonedx --output artifacts/release/sbom-cli.cdx.json "${CLI_IMAGE}:${GITHUB_REF_NAME}"
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: release-sbom
+          path: artifacts/release
+
+  sign-and-attest:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      id-token: write
+      attestations: write
+      packages: write
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad  # v4.0.0
+
+      - name: Sign runtime image
+        run: cosign sign --yes "${EDGE_IMAGE}@${{ needs.build-and-push.outputs.edge_digest }}"
+
+      - name: Sign CLI image
+        run: cosign sign --yes "${CLI_IMAGE}@${{ needs.build-and-push.outputs.cli_digest }}"
+
+      - name: Attest runtime image
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32  # v4.1.0
+        with:
+          subject-name: ${{ env.EDGE_IMAGE }}
+          subject-digest: ${{ needs.build-and-push.outputs.edge_digest }}
+          push-to-registry: true
+
+      - name: Attest CLI image
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32  # v4.1.0
+        with:
+          subject-name: ${{ env.CLI_IMAGE }}
+          subject-digest: ${{ needs.build-and-push.outputs.cli_digest }}
+          push-to-registry: true
+
+  github-release:
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push
+      - security-and-sbom
+      - sign-and-attest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
+        with:
+          generate_release_notes: true
+          body: |
+            Runtime image:
+            - `${{ env.EDGE_IMAGE }}:${{ github.ref_name }}`
+            - digest: `${{ needs.build-and-push.outputs.edge_digest }}`
+
+            CLI image:
+            - `${{ env.CLI_IMAGE }}:${{ github.ref_name }}`
+            - digest: `${{ needs.build-and-push.outputs.cli_digest }}`

@@ -1,0 +1,35 @@
+{
+  "version": "1",
+  "policies": [
+    {
+      "id": "policy_llm_default",
+      "spec": {
+        "selector": {
+          "pathExact": "/v1/chat/completions",
+          "methods": ["POST"]
+        },
+        "rules": [
+          {
+            "name": "llm_token_limit",
+            "algorithm": "token_bucket_llm",
+            "limit_key": "jwt:org_id",
+            "config": {
+              "algorithm": "token_bucket_llm",
+              "tokens_per_minute": 100000,
+              "tokens_per_day": 1000000
+            }
+          },
+          {
+            "name": "llm_loop_detection",
+            "algorithm": "loop_detection",
+            "limit_key": "jwt:org_id",
+            "config": {
+              "threshold": 3,
+              "window_seconds": 60
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

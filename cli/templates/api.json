@@ -1,0 +1,25 @@
+{
+  "version": "1",
+  "policies": [
+    {
+      "id": "policy_api_default",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/api/"
+        },
+        "rules": [
+          {
+            "name": "api_rate_limit",
+            "algorithm": "token_bucket",
+            "limit_key": "header:x-api-key",
+            "config": {
+              "algorithm": "token_bucket",
+              "tokens_per_second": 100,
+              "burst": 200
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

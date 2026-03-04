@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/fairvisor/fairvisor-edge/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately using the process in SECURITY.md — do NOT open a public issue.
+  - name: Questions & support
+    url: https://docs.fairvisor.com
+    about: Browse the docs or open a Discussion for usage questions. GitHub Issues is for confirmed bugs and feature requests.

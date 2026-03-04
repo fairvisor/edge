@@ -1,0 +1,51 @@
+{
+  "bundle_version": 1,
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2030-01-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "hosts-limited-api",
+      "spec": {
+        "selector": {
+          "hosts": [
+            "api.example.com"
+          ],
+          "pathPrefix": "/",
+          "methods": [
+            "GET",
+            "POST"
+          ]
+        },
+        "mode": "enforce",
+        "rules": [
+          {
+            "name": "api-host-token-bucket",
+            "limit_keys": [
+              "header:x-e2e-key"
+            ],
+            "algorithm": "token_bucket",
+            "algorithm_config": {
+              "tokens_per_second": 1,
+              "burst": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "hosts-global-allow",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/",
+          "methods": [
+            "GET",
+            "POST"
+          ]
+        },
+        "mode": "enforce",
+        "rules": []
+      }
+    }
+  ],
+  "kill_switches": []
+}

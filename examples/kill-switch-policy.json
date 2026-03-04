@@ -1,0 +1,35 @@
+{
+  "bundle_version": 1,
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2030-01-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "baseline-policy",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/",
+          "methods": ["GET", "POST"]
+        },
+        "mode": "enforce",
+        "rules": [
+          {
+            "name": "baseline-limit",
+            "limit_keys": ["header:x-tenant-id"],
+            "algorithm": "token_bucket",
+            "algorithm_config": {
+              "tokens_per_second": 20,
+              "burst": 40
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "kill_switches": [
+    {
+      "scope_key": "header:x-tenant-id",
+      "scope_value": "tenant-42",
+      "reason": "incident_block"
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+name: Security Nightly
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
+jobs:
+  dependency-and-image-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514  # v0.2.5
+
+      - name: Build images
+        run: |
+          docker build -f docker/Dockerfile -t fairvisor-runtime-nightly:scan .
+          docker build -f docker/Dockerfile.cli -t fairvisor-cli-nightly:scan .
+
+      - name: Generate SARIF scan reports
+        run: |
+          mkdir -p artifacts/security-nightly
+          trivy image --severity HIGH,CRITICAL --exit-code 0 --format sarif --output artifacts/security-nightly/runtime.sarif fairvisor-runtime-nightly:scan
+          trivy image --severity HIGH,CRITICAL --exit-code 0 --format sarif --output artifacts/security-nightly/cli.sarif fairvisor-cli-nightly:scan
+
+      - name: Enforce nightly HIGH/CRITICAL gate
+        run: |
+          trivy image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed fairvisor-runtime-nightly:scan
+          trivy image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed fairvisor-cli-nightly:scan
+
+      - name: Upload SARIF runtime
+        if: always()
+        uses: github/codeql-action/upload-sarif@c793b717bc78562f491db7b0e93a3a178b099162  # v4.32.5
+        with:
+          sarif_file: artifacts/security-nightly/runtime.sarif
+          category: trivy-nightly-runtime
+
+      - name: Upload SARIF cli
+        if: always()
+        uses: github/codeql-action/upload-sarif@c793b717bc78562f491db7b0e93a3a178b099162  # v4.32.5
+        with:
+          sarif_file: artifacts/security-nightly/cli.sarif
+          category: trivy-nightly-cli
+
+      - name: Upload nightly security artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: security-nightly-artifacts
+          path: artifacts/security-nightly
+          if-no-files-found: ignore
+
+      - name: Open issue on nightly security failure
+        if: failure()
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8.0.0
+        with:
+          script: |
+            const title = "security: nightly high/critical findings";
+            const body = [
+              "Nightly security scan found HIGH/CRITICAL issues.",
+              "",
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              `Commit: ${context.sha}`,
+            ].join("\n");
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ["security", "ci"],
+            });

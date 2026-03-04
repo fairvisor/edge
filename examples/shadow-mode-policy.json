@@ -1,0 +1,36 @@
+{
+  "bundle_version": 1,
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2030-01-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "shadow-mode-policy",
+      "spec": {
+        "selector": {
+          "pathPrefix": "/api/",
+          "methods": ["GET", "POST"]
+        },
+        "mode": "shadow",
+        "rules": [
+          {
+            "name": "shadow-rate-limit",
+            "limit_keys": ["header:x-api-key"],
+            "algorithm": "token_bucket",
+            "algorithm_config": {
+              "tokens_per_second": 20,
+              "burst": 40
+            }
+          }
+        ],
+        "loop_detection": {
+          "enabled": true,
+          "window_seconds": 60,
+          "threshold_identical_requests": 5,
+          "action": "reject",
+          "similarity": "exact"
+        }
+      }
+    }
+  ],
+  "kill_switches": []
+}

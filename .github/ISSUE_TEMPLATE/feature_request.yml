@@ -1,0 +1,53 @@
+name: Feature Request
+description: Propose a new feature or enhancement for Fairvisor Edge
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please describe the problem you're trying to solve
+        and your proposed solution as clearly as possible.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem description
+      description: What problem does this feature solve? Who is affected and how?
+      placeholder: "As a platform engineer, I need ... because ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or change you'd like to see
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or alternative designs did you consider and why do they fall short?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Fairvisor does this relate to?
+      options:
+        - Policy engine (Lua runtime)
+        - decision-service API
+        - reverse-proxy integration
+        - CLI
+        - Helm chart
+        - Docs
+        - CI / release pipeline
+        - Other
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Links, mockups, related issues, or prior art in other projects

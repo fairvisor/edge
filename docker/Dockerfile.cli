@@ -1,0 +1,16 @@
+FROM openresty/openresty:1.25.3.2-jammy
+
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+  && apt-get install -y --no-install-recommends \
+  perl \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/fairvisor
+
+COPY src /opt/fairvisor/src
+COPY cli /opt/fairvisor/cli
+COPY bin/fairvisor /opt/fairvisor/bin/fairvisor
+
+RUN chmod +x /opt/fairvisor/bin/fairvisor
+
+ENTRYPOINT ["/opt/fairvisor/bin/fairvisor"]

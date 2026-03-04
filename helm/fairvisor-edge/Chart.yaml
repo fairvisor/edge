@@ -1,0 +1,11 @@
+apiVersion: v2
+name: fairvisor-edge
+description: Fairvisor Edge deployment chart
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - fairvisor
+  - edge
+  - policy
+  - enforcement
