@@ -267,7 +267,7 @@ Max sustained throughput (single instance):
 |---|---|
 | Simple rate limit (1 rule) | 85,000 |
 | Complex policy (5 rules, JWT parsing, loop detection) | 52,000 |
-| With token estimation (tiktoken) | 38,000 |
+| With token estimation | 38,000 |
 
 **No external datastore.** All enforcement state lives in in-process shared memory (`ngx.shared.dict`). No Redis, no Postgres, no network round-trips in the decision path.
 
