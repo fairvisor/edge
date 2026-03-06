@@ -24,8 +24,27 @@
 </p>
 
 <p align="center">
-  <b>Sub-ms median · p99 &lt; 1ms · No Redis · No database</b>
+  <b>Latency: median 112 μs, p99 &lt; 1 ms · No external state (no Redis / DB)</b>
 </p>
+
+---
+
+## Table of Contents
+
+- [What is Fairvisor?](#what-is-fairvisor)
+- [Why not nginx / Kong / Envoy?](#why-not-nginx--kong--envoy)
+- [Quick start](#quick-start)
+- [LLM token budget in 30 seconds](#llm-token-budget-in-30-seconds)
+- [How a request flows](#how-a-request-flows)
+- [Enforcement capabilities](#enforcement-capabilities)
+- [Policy as code](#policy-as-code)
+- [Performance](#performance)
+- [Deployment](#deployment)
+- [CLI](#cli)
+- [SaaS control plane (optional)](#saas-control-plane-optional)
+- [Project layout](#project-layout)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
